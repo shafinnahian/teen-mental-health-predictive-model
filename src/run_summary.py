@@ -53,6 +53,7 @@ EXPECTED_TEST_COUNTS = {"Moderate": 149, "Healthy": 61, "At Risk": 30}
 
 LOGISTIC_PIPELINE_FILENAME = "logistic_pipeline.joblib"
 RF_PIPELINE_FILENAME = "rf_pipeline.joblib"
+PHASE4_MODEL_META_FILENAME = "phase4_model_meta.json"
 METRICS_REPORT_FILENAME = "report.json"
 
 
@@ -202,18 +203,50 @@ def collect_preprocessing_facts(
 
 
 def collect_model_facts() -> dict[str, Any] | None:
-    """Stub for Phase 4: report which model joblibs exist."""
+    """Report which model joblibs exist and optional Phase 4 CV meta JSON."""
+    from io_utils import load_json
+
     model_dir = models_dir()
+    logistic_path = model_dir / LOGISTIC_PIPELINE_FILENAME
+    rf_path = model_dir / RF_PIPELINE_FILENAME
     present = {
-        "logistic_pipeline": (model_dir / LOGISTIC_PIPELINE_FILENAME).is_file(),
-        "rf_pipeline": (model_dir / RF_PIPELINE_FILENAME).is_file(),
+        "logistic_pipeline": logistic_path.is_file() and logistic_path.stat().st_size > 0,
+        "rf_pipeline": rf_path.is_file() and rf_path.stat().st_size > 0,
     }
     if not any(present.values()):
         return None
-    return {
+
+    sizes: dict[str, int] = {}
+    if present["logistic_pipeline"]:
+        sizes["logistic_pipeline_bytes"] = int(logistic_path.stat().st_size)
+    if present["rf_pipeline"]:
+        sizes["rf_pipeline_bytes"] = int(rf_path.stat().st_size)
+
+    meta: dict[str, Any] | None = None
+    meta_path = model_dir / PHASE4_MODEL_META_FILENAME
+    if meta_path.is_file() and meta_path.stat().st_size > 0:
+        try:
+            loaded = load_json(meta_path)
+            if isinstance(loaded, dict):
+                meta = loaded
+        except (OSError, ValueError, TypeError):
+            meta = None
+
+    result: dict[str, Any] = {
         "artifacts_present": present,
-        "note": "Phase 4 model summaries not yet included in this export.",
+        "artifact_sizes_bytes": sizes,
+        "note": (
+            "Train-only CV hyperparameter selection; test-set metrics deferred to Phase 5."
+        ),
     }
+    if meta is not None:
+        result["cv_meta"] = meta
+        result["meta_path"] = _rel_if_under_root(meta_path, get_project_root())
+    else:
+        result["note"] = (
+            "Model joblibs present but phase4_model_meta.json missing or unreadable."
+        )
+    return result
 
 
 def collect_evaluation_facts() -> dict[str, Any] | None:
@@ -234,6 +267,7 @@ def _list_artifacts() -> list[str]:
         models_dir() / TRAIN_TEST_SPLIT_FILENAME,
         models_dir() / LOGISTIC_PIPELINE_FILENAME,
         models_dir() / RF_PIPELINE_FILENAME,
+        models_dir() / PHASE4_MODEL_META_FILENAME,
         metrics_dir() / METRICS_REPORT_FILENAME,
         *[figures_dir() / name for name in EXPECTED_FIGURES],
     ]
@@ -435,6 +469,25 @@ def render_run_log_md(facts: dict[str, Any], notes: str = "") -> str:
             + ", ".join(f"{k}={v}" for k, v in present_models.items())
             + "."
         )
+        sizes = models.get("artifact_sizes_bytes") or {}
+        if sizes:
+            lines.append(
+                "Artifact sizes (bytes): "
+                + ", ".join(f"{k}={v}" for k, v in sizes.items())
+                + "."
+            )
+        cv_meta = models.get("cv_meta") or {}
+        for key in ("logistic", "random_forest"):
+            entry = cv_meta.get(key)
+            if not isinstance(entry, dict):
+                continue
+            best_params = entry.get("best_params")
+            best_score = entry.get("best_cv_f1_macro")
+            lines.append(
+                f"{key}: best_params={best_params}, "
+                f"best_cv_f1_macro={best_score} "
+                "(cross-validated train macro-F1, not test)."
+            )
         if models.get("note"):
             lines.append(models["note"])
 
