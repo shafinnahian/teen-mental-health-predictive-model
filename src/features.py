@@ -18,6 +18,7 @@ PHASE3_SRC_FILES = (
     "io_utils.py",
     "run_summary.py",
     "models.py",
+    "evaluation.py",
 )
 
 
@@ -75,6 +76,8 @@ def format_colab_src_error(
         "  - Confirm files exist:",
         f"      {COLAB_REPO_PATH / 'src' / 'features.py'}",
         f"      {COLAB_REPO_PATH / 'src' / 'preprocessing.py'}",
+        f"      {COLAB_REPO_PATH / 'src' / 'models.py'}",
+        f"      {COLAB_REPO_PATH / 'src' / 'evaluation.py'}",
         "",
         "Diagnostics:",
         f"  this module loaded from: {diag['module_file']}",

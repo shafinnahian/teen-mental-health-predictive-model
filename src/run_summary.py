@@ -55,6 +55,7 @@ LOGISTIC_PIPELINE_FILENAME = "logistic_pipeline.joblib"
 RF_PIPELINE_FILENAME = "rf_pipeline.joblib"
 PHASE4_MODEL_META_FILENAME = "phase4_model_meta.json"
 METRICS_REPORT_FILENAME = "report.json"
+CONFUSION_MATRIX_FILENAME = "confusion_matrix_test.png"
 
 
 def _git_commit(repo: Path) -> str | None:
@@ -250,13 +251,40 @@ def collect_model_facts() -> dict[str, Any] | None:
 
 
 def collect_evaluation_facts() -> dict[str, Any] | None:
-    """Stub for Phase 5: report whether metrics/report.json exists."""
+    """Load metrics/report.json when it has a complete Phase 5 results block."""
+    from io_utils import load_json
+
     report_path = metrics_dir() / METRICS_REPORT_FILENAME
-    if not report_path.is_file():
+    if not report_path.is_file() or report_path.stat().st_size == 0:
         return None
+    try:
+        loaded = load_json(report_path)
+    except (OSError, ValueError, TypeError):
+        return None
+    if not isinstance(loaded, dict) or "results" not in loaded:
+        return None
+
+    results = loaded.get("results") or {}
+    test_macro: dict[str, float] = {}
+    for name, block in results.items():
+        if not isinstance(block, dict):
+            continue
+        test_block = block.get("test") or {}
+        if "f1_macro" in test_block:
+            test_macro[name] = float(test_block["f1_macro"])
+
+    cm_path = figures_dir() / CONFUSION_MATRIX_FILENAME
     return {
         "report_path": _rel_if_under_root(report_path, get_project_root()),
-        "note": "Phase 5 evaluation metrics not yet included in this export.",
+        "best_model": loaded.get("best_model"),
+        "primary_metric": loaded.get("primary_metric", "f1_macro"),
+        "test_f1_macro": test_macro,
+        "overfitting_flags": list(loaded.get("overfitting_flags") or []),
+        "limitations": list(loaded.get("limitations") or []),
+        "confusion_matrix_present": (
+            cm_path.is_file() and cm_path.stat().st_size > 0
+        ),
+        "results": results,
     }
 
 
@@ -269,6 +297,7 @@ def _list_artifacts() -> list[str]:
         models_dir() / RF_PIPELINE_FILENAME,
         models_dir() / PHASE4_MODEL_META_FILENAME,
         metrics_dir() / METRICS_REPORT_FILENAME,
+        figures_dir() / CONFUSION_MATRIX_FILENAME,
         *[figures_dir() / name for name in EXPECTED_FIGURES],
     ]
     return [
@@ -303,6 +332,7 @@ def detect_flags(facts: dict[str, Any]) -> list[str]:
     data = facts.get("data") or {}
     eda = facts.get("eda") or {}
     prep = facts.get("preprocessing")
+    evaluation = facts.get("evaluation")
 
     if data.get("n_rows") != EXPECTED_ROWS or data.get("n_cols") != EXPECTED_COLS:
         flags.append(
@@ -363,6 +393,37 @@ def detect_flags(facts: dict[str, Any]) -> list[str]:
             flags.append(f"Missing artifact: {PREPROCESS_PIPELINE_FILENAME}.")
         if not split_path.is_file():
             flags.append(f"Missing artifact: {TRAIN_TEST_SPLIT_FILENAME}.")
+
+    if evaluation is not None:
+        for item in evaluation.get("overfitting_flags") or []:
+            flags.append(str(item))
+        results = evaluation.get("results") or {}
+        for model_name in ("logistic", "random_forest"):
+            block = results.get(model_name) or {}
+            train_f1 = float((block.get("train") or {}).get("f1_macro", 0.0))
+            test_f1 = float((block.get("test") or {}).get("f1_macro", 0.0))
+            gap = train_f1 - test_f1
+            if gap > 0.05 and not any(model_name in str(f) for f in flags):
+                flags.append(
+                    f"{model_name}: train vs test macro-F1 gap={gap:.3f}."
+                )
+        best = evaluation.get("best_model")
+        if best and best in results:
+            at_risk = (
+                ((results[best].get("test") or {}).get("per_class") or {})
+                .get("At Risk")
+                or {}
+            )
+            recall = at_risk.get("recall")
+            if recall is not None and float(recall) < 0.5:
+                msg = (
+                    f"Best model ({best}) At Risk test recall="
+                    f"{float(recall):.3f} < 0.5."
+                )
+                if msg not in flags and not any(
+                    "At Risk test recall" in str(f) for f in flags
+                ):
+                    flags.append(msg)
 
     return flags
 
@@ -488,14 +549,29 @@ def render_run_log_md(facts: dict[str, Any], notes: str = "") -> str:
                 f"best_cv_f1_macro={best_score} "
                 "(cross-validated train macro-F1, not test)."
             )
-        if models.get("note"):
+        if models.get("note") and evaluation is None:
             lines.append(models["note"])
 
     if evaluation is not None:
         lines.extend(["", "## Evaluation", ""])
-        lines.append(f"Found `{evaluation.get('report_path')}`.")
-        if evaluation.get("note"):
-            lines.append(evaluation["note"])
+        best = evaluation.get("best_model")
+        primary = evaluation.get("primary_metric", "f1_macro")
+        lines.append(
+            f"Best model by test {primary}: {best}. "
+            f"Report: `{evaluation.get('report_path')}`."
+        )
+        test_macro = evaluation.get("test_f1_macro") or {}
+        if test_macro:
+            rounded = ", ".join(
+                f"{name}={score:.3f}" for name, score in test_macro.items()
+            )
+            lines.append(f"Test macro-F1: {rounded}.")
+        if evaluation.get("confusion_matrix_present"):
+            lines.append(
+                f"Confusion matrix saved: outputs/figures/{CONFUSION_MATRIX_FILENAME}."
+            )
+        for item in evaluation.get("overfitting_flags") or []:
+            lines.append(str(item))
 
     lines.extend(["", "## Flags", ""])
     if flags:
@@ -528,6 +604,7 @@ def _write_tables(
     data: dict[str, Any],
     eda: dict[str, Any],
     preprocessing: dict[str, Any] | None,
+    evaluation: dict[str, Any] | None = None,
 ) -> list[Path]:
     tables_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
@@ -578,6 +655,42 @@ def _write_tables(
     else:
         pd.DataFrame(columns=["index", "feature_name"]).to_csv(feat_path, index=False)
     written.append(feat_path)
+
+    metrics_path = tables_dir / "metrics_comparison.csv"
+    metric_rows: list[dict[str, Any]] = []
+    results = (evaluation or {}).get("results") or {}
+    for model_name, block in results.items():
+        if not isinstance(block, dict):
+            continue
+        for split in ("train", "test"):
+            metrics = block.get(split)
+            if not metrics:
+                continue
+            at_risk = (metrics.get("per_class") or {}).get("At Risk") or {}
+            metric_rows.append(
+                {
+                    "model": model_name,
+                    "split": split,
+                    "accuracy": metrics.get("accuracy"),
+                    "f1_macro": metrics.get("f1_macro"),
+                    "f1_weighted": metrics.get("f1_weighted"),
+                    "at_risk_recall": at_risk.get("recall"),
+                }
+            )
+    if metric_rows:
+        pd.DataFrame(metric_rows).to_csv(metrics_path, index=False)
+    else:
+        pd.DataFrame(
+            columns=[
+                "model",
+                "split",
+                "accuracy",
+                "f1_macro",
+                "f1_weighted",
+                "at_risk_recall",
+            ]
+        ).to_csv(metrics_path, index=False)
+    written.append(metrics_path)
 
     return written
 
@@ -631,7 +744,11 @@ def write_run_summary(
     staging.mkdir(parents=True, exist_ok=True)
     tables_dir = staging / "tables"
     table_paths = _write_tables(
-        tables_dir, data=data, eda=eda, preprocessing=preprocessing
+        tables_dir,
+        data=data,
+        eda=eda,
+        preprocessing=preprocessing,
+        evaluation=evaluation,
     )
 
     md_path = staging / "run_log.md"
