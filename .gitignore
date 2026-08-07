@@ -1,0 +1,9 @@
+skills-lock.json
+.agents
+outputs/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+
+internal_docs/
