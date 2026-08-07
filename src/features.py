@@ -16,6 +16,7 @@ PHASE3_SRC_FILES = (
     "data_loader.py",
     "paths.py",
     "io_utils.py",
+    "run_summary.py",
 )
 
 

@@ -35,11 +35,21 @@ def metrics_dir() -> Path:
     return PROJECT_ROOT / "outputs" / "metrics"
 
 
+def run_summary_dir() -> Path:
+    """Staging directory for the run summary export."""
+    return PROJECT_ROOT / "outputs" / "run_summary"
+
+
+def run_summary_zip_path() -> Path:
+    """Downloadable run summary ZIP written after a notebook run."""
+    return PROJECT_ROOT / "outputs" / "run_summary.zip"
+
+
 def requirements_path() -> Path:
     return PROJECT_ROOT / "requirements.txt"
 
 
 def ensure_output_dirs() -> None:
     """Create output subdirectories if they do not exist."""
-    for directory in (figures_dir(), models_dir(), metrics_dir()):
+    for directory in (figures_dir(), models_dir(), metrics_dir(), run_summary_dir()):
         directory.mkdir(parents=True, exist_ok=True)
