@@ -4,11 +4,11 @@ DS1 final project — multiclass prediction of `digital_wellbeing_flag` from lif
 
 ## Quick start (Colab)
 
-1. Clone this repo into `/content/`, **or** upload a zip and unzip it under `/content/`.
-2. Open `notebooks/00_setup_and_config.ipynb`.
-3. Run all cells (installs dependencies, verifies paths, loads `data/Teen_Mental_Health.csv`).
+1. Open `notebooks/digital_wellbeing_classifier.ipynb` in Colab.
+2. Run all cells. The clone cell pulls the repo to `/content/teen-mental-health-predictive-model`.
+3. The dataset path is `/content/teen-mental-health-predictive-model/data/Teen_Mental_Health.csv`.
 
-Expected result: shape `(1200, 16)`, target `digital_wellbeing_flag`.
+Expected result: setup and EDA pass, then Phase 3 saves `outputs/models/preprocess_pipeline.joblib` and `train_test_split.joblib`.
 
 ## Project docs
 
@@ -26,7 +26,7 @@ Expected result: shape `(1200, 16)`, target `digital_wellbeing_flag`.
 
 ```
 data/                 # Colab deployment CSV
-notebooks/            # Numbered Colab entry points
+notebooks/            # Colab entry point (digital_wellbeing_classifier.ipynb)
 src/                  # Importable modules (flat imports)
 outputs/              # Runtime artifacts (gitignored)
 requirements.txt
