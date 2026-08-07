@@ -17,6 +17,7 @@ PHASE3_SRC_FILES = (
     "paths.py",
     "io_utils.py",
     "run_summary.py",
+    "models.py",
 )
 
 
