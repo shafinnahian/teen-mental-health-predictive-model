@@ -1,6 +1,6 @@
 # Teen Mental Health Predictive Model
 
-DS1 final project — multiclass prediction of `digital_wellbeing_flag` from lifestyle features only. Runs in Google Colab.
+DS1 final project: multiclass prediction of `digital_wellbeing_flag` from lifestyle features only. Runs in Google Colab.
 
 ## Quick start (Colab)
 
@@ -12,6 +12,8 @@ Expected result: setup and EDA pass, then Phase 3 saves `outputs/models/preproce
 
 ## Project docs
 
+Decision documentation for teammates writing the report: [`docs/README.md`](docs/README.md).
+
 ## Locked modeling choices
 
 | Setting | Value |
@@ -20,7 +22,7 @@ Expected result: setup and EDA pass, then Phase 3 saves `outputs/models/preproce
 | Task | Multiclass classification |
 | Features | Lifestyle-only (9 columns) |
 | Models | Multinomial Logistic Regression + Random Forest |
-| Dataset | [Kaggle — argonnxx/teen-mental-health](https://www.kaggle.com/datasets/argonnxx/teen-mental-health) |
+| Dataset | [Kaggle - argonnxx/teen-mental-health](https://www.kaggle.com/datasets/argonnxx/teen-mental-health) |
 
 ## Layout
 

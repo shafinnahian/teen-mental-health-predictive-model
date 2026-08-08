@@ -1,7 +1,7 @@
 """Locked project constants for the DS1 teen mental-health prediction track.
 
 Dataset: https://www.kaggle.com/datasets/argonnxx/teen-mental-health
-Decisions: see internal_docs/master_plan_source.md
+Decisions: see docs/prediction-track/00_scope_and_locked_decisions.md
 """
 
 SEED = 42
